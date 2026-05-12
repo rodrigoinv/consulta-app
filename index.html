@@ -1,32 +1,127 @@
-function doGet(e) {
-  const codeToFind = e.parameter.code;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  
-  for (let i = 1; i < data.length; i++) {
-    // Ahora busca en las columnas A (0), B (1) o C (2)
-    // que corresponden a EAN, DUN y Cod HBC
-    if (data[i][0].toString() == codeToFind || 
-        data[i][1].toString() == codeToFind || 
-        data[i][2].toString() == codeToFind) {
-      
-      let result = {};
-      headers.forEach((header, index) => {
-        if (header) {
-          result[header] = data[i][index] || "---";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Logística PRO</title>
+    <style>
+        *{box-sizing:border-box; margin:0; padding:0}
+        body{font-family: 'Segoe UI', sans-serif; background:#f4f7f9; color:#333}
+        header{background:#1a73e8; color:white; padding:15px; position:sticky; top:0; z-index:10; text-align:center; box-shadow: 0 2px 5px rgba(0,0,0,0.1)}
+        .search-box{padding:15px; background:white; position:sticky; top:54px; z-index:9}
+        input{width:100%; padding:15px; border:2px solid #ddd; border-radius:8px; font-size:16px; outline:none; transition:0.3s}
+        input:focus{border-color:#1a73e8}
+        .container{padding:10px}
+        .card{background:white; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.05); margin-bottom:20px; display:none}
+        .product-title{background:#f8f9fa; padding:15px; border-bottom:1px solid #eee; color:#1a73e8; font-weight:bold}
+        .data-table{width:100%; border-collapse:collapse}
+        .data-table tr:nth-child(even){background:#fcfcfc}
+        .data-table td{padding:12px 15px; border-bottom:1px solid #eee; font-size:14px}
+        .label{color:#777; font-weight:600; width:40%; text-transform: capitalize}
+        .value{text-align:right; font-weight:500}
+        #loader{display:none; text-align:center; padding:20px; font-weight:bold; color:#1a73e8}
+        #toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:10px 20px; border-radius:20px; font-size:14px; display:none; z-index:100}
+    </style>
+</head>
+<body>
+
+<header><h2>📦 Maestro Logístico</h2></header>
+
+<div class="search-box">
+    <input type="text" id="searchInput" placeholder="EAN, DUN o Cod HBC..." autocomplete="off">
+</div>
+
+<div class="container">
+    <div id="loader">Buscando en la base...</div>
+    
+    <div id="resultCard" class="card">
+        <div class="product-title" id="prodName">Datos de Logística</div>
+        <table class="data-table" id="dataTable">
+            <!-- Los datos se inyectarán aquí -->
+        </table>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    // 1. REEMPLAZA ESTA URL POR TU URL DE GOOGLE APPS SCRIPT
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzQqtVA5ErBWB-e1MMCLrmIgB6fUbnlGmLo_4HKdWAs_nz327LXyMyz3YmLnyQcsUMWnw/exec'; 
+
+    const searchInput = document.getElementById('searchInput');
+    const resultCard = document.getElementById('resultCard');
+    const dataTable = document.getElementById('dataTable');
+    const loader = document.getElementById('loader');
+
+    searchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            doSearch(this.value);
         }
-      });
-      
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "ok",
-        data: result
-      })).setMimeType(ContentService.MimeType.JSON);
+    });
+
+    async function doSearch(val) {
+        if(!val) return;
+        loader.style.display = 'block';
+        resultCard.style.display = 'none';
+        
+        try {
+            const resp = await fetch(`${API_URL}?code=${val}`);
+            const res = await resp.json();
+            
+            if(res.status === "ok") {
+                renderData(res.data);
+            } else {
+                showToast("❌ No encontrado");
+            }
+        } catch (err) {
+            showToast("❌ Error de red o URL inválida");
+        } finally {
+            loader.style.display = 'none';
+        }
     }
-  }
-  
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "error",
-    msg: "Código no encontrado"
-  })).setMimeType(ContentService.MimeType.JSON);
-}
+
+    function renderData(data) {
+        let html = '';
+        
+        // ORDEN PRIORITARIO: Deben coincidir exactamente con los nombres de tus columnas en Sheets
+        const ordenPrioritario = [
+            'Ean 13 /Upc', 
+            'Dun14 /Gtin', 
+            'Cod Hbc', 
+            'DESCRIPCION', 
+            'Un x caja', 
+            'Un x pallet', 
+            'caja x layer', 
+            'layer'
+        ];
+        
+        document.getElementById('prodName').textContent = data['DESCRIPCION'] || 'Ficha de Producto';
+        
+        // Primero insertamos las prioritarias
+        ordenPrioritario.forEach(key => {
+            if (data[key] !== undefined) {
+                html += `<tr><td class="label" style="color:#1a73e8">${key}</td><td class="value">${data[key]}</td></tr>`;
+            }
+        });
+
+        // Después todas las demás columnas restantes
+        for (const [key, value] of Object.entries(data)) {
+            if (!ordenPrioritario.includes(key)) {
+                html += `<tr><td class="label">${key}</td><td class="value">${value}</td></tr>`;
+            }
+        }
+        
+        dataTable.innerHTML = html;
+        resultCard.style.display = 'block';
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
+</script>
+
+</body>
+</html>
