@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Logística PRO</title>
+    <style>
+        *{box-sizing:border-box; margin:0; padding:0}
+        body{font-family: 'Segoe UI', sans-serif; background:#f4f7f9; color:#333}
+        
+        header{background:#1a73e8; color:white; padding:15px; position:sticky; top:0; z-index:10; text-align:center; box-shadow: 0 2px 5px rgba(0,0,0,0.1)}
+        
+        .search-box{padding:15px; background:white; position:sticky; top:54px; z-index:9}
+        input{width:100%; padding:15px; border:2px solid #ddd; border-radius:8px; font-size:16px; outline:none; transition:0.3s}
+        input:focus{border-color:#1a73e8}
+
+        .container{padding:10px}
+        .card{background:white; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.05); margin-bottom:20px; display:none}
+        
+        .product-title{background:#f8f9fa; padding:15px; border-bottom:1px solid #eee; color:#1a73e8; font-weight:bold}
+        
+        .data-table{width:100%; border-collapse:collapse}
+        .data-table tr:nth-child(even){background:#fcfcfc}
+        .data-table td{padding:12px 15px; border-bottom:1px solid #eee; font-size:14px}
+        .label{color:#777; font-weight:600; width:40%; text-transform: capitalize}
+        .value{text-align:right; font-weight:500}
+
+        #loader{display:none; text-align:center; padding:20px; font-weight:bold; color:#1a73e8}
+        #toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:10px 20px; border-radius:20px; font-size:14px; display:none}
+    </style>
+</head>
+<body>
+
+<header><h2>📦 Maestro Logístico</h2></header>
+
+<div class="search-box">
+    <input type="text" id="searchInput" placeholder="EAN, DUN o SKU..." autocomplete="off">
+</div>
+
+<div class="container">
+    <div id="loader">Buscando...</div>
+    
+    <div id="resultCard" class="card">
+        <div class="product-title" id="prodName">Información del Producto</div>
+        <table class="data-table" id="dataTable">
+            <!-- Los 40 datos aparecerán aquí -->
+        </table>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    const API_URL = 'TU_URL_DE_APPS_SCRIPT_AQUI'; // <--- PEGA TU URL AQUÍ
+
+    const searchInput = document.getElementById('searchInput');
+    const resultCard = document.getElementById('resultCard');
+    const dataTable = document.getElementById('dataTable');
+    const loader = document.getElementById('loader');
+
+    searchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            doSearch(this.value);
+        }
+    });
+
+    async function doSearch(val) {
+        if(!val) return;
+        
+        loader.style.display = 'block';
+        resultCard.style.display = 'none';
+        
+        try {
+            const resp = await fetch(`${API_URL}?code=${val}`);
+            const res = await resp.json();
+            
+            if(res.status === "ok") {
+                renderData(res.data);
+            } else {
+                showToast("❌ No encontrado");
+            }
+        } catch (err) {
+            showToast("❌ Error de red");
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+    function renderData(data) {
+        let html = '';
+        // Usamos el nombre del producto (asumiendo que tienes una columna llamada Descripción o Nombre)
+        document.getElementById('prodName').textContent = data['DESCRIPCION'] || data['PRODUCTO'] || 'Datos de Logística';
+        
+        for (const [key, value] of Object.entries(data)) {
+            html += `
+                <tr>
+                    <td class="label">${key.toLowerCase().replace(/_/g, ' ')}</td>
+                    <td class="value">${value}</td>
+                </tr>
+            `;
+        }
+        dataTable.innerHTML = html;
+        resultCard.style.display = 'block';
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
+</script>
+
+</body>
+</html>
