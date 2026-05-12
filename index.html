@@ -1,44 +1,32 @@
-function renderData(data) {
-    let html = '';
-    // Definimos el orden de las columnas críticas que mencionaste
-    const ordenPrioritario = [
-        'Ean 13 /Upc', 
-        'Dun14 /Gtin', 
-        'Cod Hbc', 
-        'DESCRIPCION', 
-        'Un x caja', 
-        'Un x pallet', 
-        'caja x layer', 
-        'layer'
-    ];
-    
-    // Título principal
-    document.getElementById('prodName').textContent = data['DESCRIPCION'] || 'Datos de Logística';
-    
-    // 1. Agregamos primero las columnas prioritarias en orden
-    ordenPrioritario.forEach(key => {
-        if (data[key] !== undefined) {
-            html += `
-                <tr>
-                    <td class="label" style="color: #1a73e8; font-weight: bold;">${key}</td>
-                    <td class="value">${data[key]}</td>
-                </tr>
-            `;
+function doGet(e) {
+  const codeToFind = e.parameter.code;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; 
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  for (let i = 1; i < data.length; i++) {
+    // Ahora busca en las columnas A (0), B (1) o C (2)
+    // que corresponden a EAN, DUN y Cod HBC
+    if (data[i][0].toString() == codeToFind || 
+        data[i][1].toString() == codeToFind || 
+        data[i][2].toString() == codeToFind) {
+      
+      let result = {};
+      headers.forEach((header, index) => {
+        if (header) {
+          result[header] = data[i][index] || "---";
         }
-    });
-
-    // 2. Agregamos el resto de las columnas (las otras 30+) que no estaban en la lista
-    for (const [key, value] of Object.entries(data)) {
-        if (!ordenPrioritario.includes(key)) {
-            html += `
-                <tr>
-                    <td class="label">${key}</td>
-                    <td class="value">${value}</td>
-                </tr>
-            `;
-        }
+      });
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "ok",
+        data: result
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-    
-    dataTable.innerHTML = html;
-    resultCard.style.display = 'block';
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "error",
+    msg: "Código no encontrado"
+  })).setMimeType(ContentService.MimeType.JSON);
 }
